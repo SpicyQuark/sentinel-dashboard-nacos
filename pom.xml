@@ -148,6 +148,10 @@
                 <configuration>
                     <fork>true</fork>
                     <mainClass>com.alibaba.csp.sentinel.dashboard.DashboardApplication</mainClass>
+                    <manifestEntries>
+							<!-- 在Class-Path下添加配置文件的路径 -->
+							<Class-Path>config/</Class-Path>
+					</manifestEntries>
                 </configuration>
                 <executions>
                     <execution>
@@ -175,12 +179,67 @@
                     <skip>true</skip>
                 </configuration>
             </plugin>
+            
+            <!-- 项目资源插件 -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-resources-plugin</artifactId>
+				<version>2.6</version>
+				<executions>
+					<!--拷贝配置文件 -->
+					<execution>
+						<id>copy-properties</id>
+						<phase>package</phase>
+						<goals>
+							<goal>copy-resources</goal>
+						</goals>
+						<configuration>
+							<encoding>UTF-8</encoding>
+							<!-- 拷贝项目*/config目录下所有文件到*/config/目录下 -->
+							<outputDirectory>${project.build.directory}/config</outputDirectory>
+							<resources>
+								<resource>
+									<directory>src/main/resources</directory>
+									<includes>
+										<include>**/*.properties</include>
+									</includes>
+								</resource>
+							</resources>
+						</configuration>
+					</execution>
+					<!--拷贝启动文件 -->
+					<execution>
+						<id>copy-startup</id>
+						<phase>package</phase>
+						<goals>
+							<goal>copy-resources</goal>
+						</goals>
+						<configuration>
+							<encoding>UTF-8</encoding>
+							<!-- 拷贝项目*/config目录下所有文件到*/config/目录下 -->
+							<outputDirectory>${project.build.directory}/</outputDirectory>
+							<resources>
+								<resource>
+									<directory>src/main/resources</directory>
+									<includes>
+										<include>**/*.sh</include>
+									</includes>
+								</resource>
+							</resources>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
         </plugins>
 
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
                 <filtering>true</filtering>
+                <excludes>
+					<exclude>**/*.properties</exclude>
+					<exclude>**/*.sh</exclude>
+				</excludes>
             </resource>
 
             <resource>
