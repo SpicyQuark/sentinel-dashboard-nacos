@@ -15,6 +15,7 @@
  */
 package com.alibaba.csp.sentinel.dashboard.service;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -24,12 +25,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Service;
 import com.alibaba.csp.sentinel.cluster.ClusterStateManager;
-import com.alibaba.csp.sentinel.dashboard.domain.cluster.state.ClusterUniversalStatePairVO;
-import com.alibaba.csp.sentinel.util.AssertUtil;
-import com.alibaba.csp.sentinel.util.function.Tuple2;
-
 import com.alibaba.csp.sentinel.dashboard.client.SentinelApiClient;
 import com.alibaba.csp.sentinel.dashboard.domain.cluster.ClusterAppAssignResultVO;
 import com.alibaba.csp.sentinel.dashboard.domain.cluster.ClusterGroupEntity;
@@ -37,11 +38,11 @@ import com.alibaba.csp.sentinel.dashboard.domain.cluster.config.ClusterClientCon
 import com.alibaba.csp.sentinel.dashboard.domain.cluster.config.ServerFlowConfig;
 import com.alibaba.csp.sentinel.dashboard.domain.cluster.config.ServerTransportConfig;
 import com.alibaba.csp.sentinel.dashboard.domain.cluster.request.ClusterAppAssignMap;
+import com.alibaba.csp.sentinel.dashboard.domain.cluster.state.ClusterUniversalStatePairVO;
+import com.alibaba.csp.sentinel.dashboard.rule.DynamicRulePublisher;
 import com.alibaba.csp.sentinel.dashboard.util.MachineUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
+import com.alibaba.csp.sentinel.util.AssertUtil;
+import com.alibaba.csp.sentinel.util.function.Tuple2;
 
 /**
  * @author Eric Zhao
@@ -56,6 +57,10 @@ public class ClusterAssignServiceImpl implements ClusterAssignService {
     private SentinelApiClient sentinelApiClient;
     @Autowired
     private ClusterConfigService clusterConfigService;
+
+  @Autowired
+  @Qualifier("clusterAssignConfigPublisher")
+  DynamicRulePublisher<List<ClusterAppAssignMap>> dynamicRulePublisher;
 
     private boolean isMachineInApp(/*@NonEmpty*/ String machineId) {
         return machineId.contains(":");
@@ -137,6 +142,12 @@ public class ClusterAssignServiceImpl implements ClusterAssignService {
             result.getFailedClientSet().addAll(resultVO.getFailedClientSet());
             result.getFailedServerSet().addAll(resultVO.getFailedServerSet());
         }
+     // 写入配置中心
+        try {
+          dynamicRulePublisher.publish(app, Collections.emptyList());
+        } catch (Exception e1) {
+          LOGGER.error("Failed to unbind all machines ", e1);
+        }
         return result;
     }
 
@@ -169,9 +180,15 @@ public class ClusterAssignServiceImpl implements ClusterAssignService {
         // Unbind remaining (unassigned) machines.
         applyAllRemainingMachineSet(app, remainingSet, failedClientSet);
 
-        return new ClusterAppAssignResultVO()
-            .setFailedClientSet(failedClientSet)
-            .setFailedServerSet(failedServerSet);
+    // 写入配置中心
+    try {
+      dynamicRulePublisher.publish(app, clusterMap);
+    } catch (Exception e1) {
+      LOGGER.error("Failed to assign machines : " + clusterMap, e1);
+    }
+    return new ClusterAppAssignResultVO()
+        .setFailedClientSet(failedClientSet)
+        .setFailedServerSet(failedServerSet);
     }
 
     private void applyAllRemainingMachineSet(String app, Set<String> remainingSet, Set<String> failedSet) {
